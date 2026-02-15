@@ -4,68 +4,67 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-# Configuración de pantalla móvil
-st.set_page_config(page_title="SPY 0DTE PRO", page_icon="🛡️", layout="centered")
+# Configuración móvil
+st.set_page_config(page_title="SPY 0DTE IC", page_icon="🦅", layout="centered")
 
-st.title("🛡️ SPY 0DTE MAESTRO")
+st.title("🦅 IRON CONDOR 0DTE")
 
-# --- BARRA LATERAL: GESTIÓN DE CAPITAL ---
-st.sidebar.header("💰 Configuración de Cuenta")
-capital_actual = st.sidebar.slider("Tu Capital en IBKR (€)", 20000, 50000, 25000, step=500)
-riesgo_pct = st.sidebar.slider("Riesgo por Operación (%)", 0.5, 3.0, 1.0, step=0.1)
+# --- SIDEBAR: GESTIÓN DE CUENTA ---
+st.sidebar.header("💰 Cuenta IBKR")
+capital_actual = st.sidebar.slider("Saldo (€)", 20000, 50000, 25000, step=500)
+riesgo_pct = st.sidebar.slider("Riesgo Máx (%)", 0.5, 2.0, 1.0, step=0.1)
 
-# --- LÓGICA PRINCIPAL ---
-def analizar_mercado_movil():
+def analizar_ic_completo():
     try:
-        # Descarga de datos rápida
-        vols = yf.download(["^VIX", "^VIX1D", "^VVIX", "SPY"], period="1d", interval="15m", progress=False)
+        # Descarga rápida
+        data = yf.download(["^VIX1D", "SPY"], period="1d", interval="15m", progress=False)
+        vix1d = data['Close']['^VIX1D'].iloc[-1]
+        vix1d_open = data['Open']['^VIX1D'].iloc
+        spy = data['Close']['SPY'].iloc[-1]
         
-        vix1d_actual = vols['Close']['^VIX1D'].iloc[-1]
-        vix1d_open = vols['Open']['^VIX1D'].iloc[0]
-        spy_actual = vols['Close']['SPY'].iloc[-1]
-        vvix = vols['Close']['^VVIX'].iloc[-1]
+        var_vix1d = (vix1d / vix1d_open - 1) * 100
         
-        var_vix1d = (vix1d_actual / vix1d_open - 1) * 100
-        
-        # 1. SEMÁFORO DE RIESGO
-        if var_vix1d > 10 or vvix > 115:
-            st.error(f"🔴 ROJO: RIESGO EXTREMO ({var_vix1d:.2f}%)")
-            st.markdown("**ACCIÓN:** CIERRE INMEDIATO. No operar.")
+        # 1. SEMÁFORO
+        if var_vix1d > 10:
+            st.error(f"🔴 RIESGO EXTREMO ({var_vix1d:.2f}%)")
+            st.button("⚠️ CERRAR TODO EN IBKR")
         elif var_vix1d > 5:
-            st.warning(f"🟡 AMARILLO: VIGILANCIA ({var_vix1d:.2f}%)")
-            st.markdown("**ACCIÓN:** Reducir contratos o alejar strikes.")
+            st.warning(f"🟡 VIGILANCIA ({var_vix1d:.2f}%)")
         else:
-            st.success(f"🟢 VERDE: MERCADO SEGURO ({var_vix1d:.2f}%)")
-            st.markdown("**ACCIÓN:** Operativa normal según el plan.")
+            st.success(f"🟢 MERCADO ESTABLE ({var_vix1d:.2f}%)")
 
-        # 2. MÉTRICAS CLAVE
+        # 2. CÁLCULO ESTRATEGIA (ANCHO 5 PUNTOS)
+        st.write("### 💎 Estructura Iron Condor")
+        st.caption("Estrategia neutral: El SPY debe quedar entre las ventas.")
+        
+        dist = spy * (vix1d / 100) * 0.32 # Coeficiente adaptativo
+        s_call = round(spy + dist)
+        s_put = round(spy - dist)
+        ancho = 5 # Puntos de seguridad estándar
+        
+        # Diseño visual de las 4 patas
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 📈 Lado Call")
+            st.error(f"**VENDER:** {s_call}")
+            st.info(f"**COMPRAR:** {s_call + ancho}")
+            
+        with col2:
+            st.markdown("#### 📉 Lado Put")
+            st.success(f"**VENDER:** {s_put}")
+            st.info(f"**COMPRAR:** {s_put - ancho}")
+
+        # 3. GESTIÓN DE CONTRATOS
         st.divider()
-        c1, c2, c3 = st.columns(3)
-        c1.metric("SPY", f"{spy_actual:.2f}")
-        c2.metric("VIX1D", f"{vix1d_actual:.2f}")
-        c3.metric("VVIX", f"{vvix:.1f}")
-
-        # 3. CALCULADORA DE LOTES DINÁMICA
-        st.write("### 🧮 Gestión de Lotes")
-        riesgo_euros = capital_actual * (riesgo_pct / 100)
-        # Asumiendo spread de 5 puntos ($500 de riesgo por contrato)
-        contratos_sugeridos = max(1, int(riesgo_euros / 460)) # 460€ aprox son $500
+        riesgo_monetario = capital_actual * (riesgo_pct / 100)
+        lotes = max(1, int(riesgo_monetario / 465)) # 465€ aprox = $500 riesgo
         
-        st.write(f"Con un riesgo del **{riesgo_pct}%**, puedes operar:")
-        st.info(f"👉 **{contratos_sugeridos} Contratos** (Riesgo: {round(riesgo_euros)}€)")
-
-        # 4. ESTRUCTURA DE STRIKES (16:30h)
-        st.write("### 🎯 Strikes Sugeridos")
-        coef = 3.2 if vix1d_actual > 20 else 2.8
-        dist = spy_actual * (vix1d_actual / 100) * (coef/10)
+        st.metric("Nº de Contratos Sugeridos", f"{lotes} Lotes")
+        st.write(f"Riesgo total en esta operación: **{round(riesgo_monetario)}€**")
         
-        st.success(f"**SELL PUT:** {round(spy_actual - dist)}")
-        st.error(f"**SELL CALL:** {round(spy_actual + dist)}")
-        
-        st.caption(f"Datos actualizados: {datetime.now().strftime('%H:%M:%S')}")
+    except:
+        st.info("⌛ Esperando apertura (15:30h ES) o revisa conexión.")
 
-    except Exception as e:
-        st.info("🕒 Esperando datos de mercado... (Apertura 15:30h)")
-
-if st.button('🚀 ANALIZAR AHORA', use_container_width=True):
-    analizar_mercado_movil()
+if st.button('🚀 GENERAR IRON CONDOR AHORA', use_container_width=True):
+    analizar_ic_completo()

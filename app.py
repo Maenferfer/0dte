@@ -4,6 +4,12 @@ import pandas as pd
 from datetime import datetime
 import pytz
 
+# Forzar limpieza de caché para evitar errores de datos viejos
+st.cache_data.clear()
+
+st.set_page_config(page_title="SPY Sentinel", layout="centered")
+
+
 # 1. CONFIGURACIÓN DE LA APP MÓVIL
 st.set_page_config(page_title="SPY Sentinel 0DTE", page_icon="🛡️", layout="centered")
 

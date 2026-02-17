@@ -10,27 +10,43 @@ st.set_page_config(page_title="SPY 0DTE Sentinel", page_icon="🛡️", layout="
 def get_market_data():
     sent_tickers = {"vix1d": "^VIX1D", "vvix": "^VVIX", "vix": "^VIX", "vix3m": "^VIX3M"}
     vals = {}
+    
     for k, v in sent_tickers.items():
         try:
-            data = yf.Ticker(v).history(period="5d")
-            vals[k] = data['Close'].iloc[-1] if not data.empty else 0.0
+            # Intentamos obtener el cierre de los últimos 5 días
+            ticker = yf.Ticker(v)
+            data = ticker.history(period="5d")
+            if not data.empty:
+                vals[k] = data['Close'].iloc[-1]
+            else:
+                vals[k] = 0.0
         except:
             vals[k] = 0.0
-    
+
+    # --- CORRECCIÓN VIX1D VACÍO ---
+    # Si VIX1D es 0 (mercado cerrado o fallo API), usamos VIX estándar como referencia
+    if vals.get('vix1d') == 0 or pd.isna(vals.get('vix1d')):
+        vals['vix1d'] = vals.get('vix', 20.0) # 20.0 es un valor neutro por defecto
+        st.sidebar.warning("⚠️ VIX1D no disponible. Usando VIX estándar como respaldo.")
+
     try:
         spy_ticker = yf.Ticker("SPY")
         spy_hist = spy_ticker.history(period="2d", interval="5m")
         if spy_hist.empty: return vals, 0, 0, 0, 0
+        
         current_price = spy_hist['Close'].iloc[-1]
         last_date = spy_hist.index[-1].date()
         today_data = spy_hist[spy_hist.index.date == last_date].copy()
+        
         today_data['TP'] = (today_data['High'] + today_data['Low'] + today_data['Close']) / 3
         vwap = (today_data['TP'] * today_data['Volume']).sum() / today_data['Volume'].sum()
         dist_vwap = ((current_price - vwap) / vwap) * 100
         contango = ((vals['vix3m'] / vals['vix']) - 1) * 100 if vals.get('vix', 0) > 0 else 0
+        
         return vals, current_price, vwap, dist_vwap, contango
     except:
         return vals, 0, 0, 0, 0
+
 
 # --- PUNTO 2: FUNCIÓN DE MOSTRAR ESTRATEGIA CON CÁLCULO DE CAPITAL ---
 def mostrar_estrategia(nombre, p_buy, p_sell, c_sell, c_buy, riesgo_max):
@@ -93,3 +109,4 @@ if st.button('🚀 LANZAR ESCANEO DE MERCADO', use_container_width=True):
 
 st.divider()
 st.caption("Ajusta el capital en la barra lateral izquierda.")
+

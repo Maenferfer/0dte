@@ -57,7 +57,13 @@ def mostrar_estrategia(nombre, p_buy, p_sell, c_sell, c_buy):
 # 2. INTERFAZ STREAMLIT
 st.title("🛡️ SPY 0DTE Sentinel")
 madrid_tz = pytz.timezone('Europe/Madrid')
-st.caption(f"Hora España: {datetime.now(madrid_tz).strftime('%H:%M:%S')} | Capital: $25,000")
+# Entrada de capital manual
+capital = st.sidebar.number_input("💰 Capital de la Cuenta ($)", min_value=1000, value=25000, step=500)
+riesgo_porcentual = st.sidebar.slider("% Riesgo por operación", 0.5, 5.0, 1.0) / 100
+riesgo_maximo = capital * riesgo_porcentual
+
+st.caption(f"Hora España: {datetime.now(madrid_tz).strftime('%H:%M:%S')} | Gestión de Riesgo: ${riesgo_maximo:.0f} máx.")
+
 
 if st.button('🚀 LANZAR ESCANEO DE MERCADO', use_container_width=True):
     with st.spinner('Analizando volatilidad y strikes...'):
@@ -125,3 +131,4 @@ if st.button('🚀 LANZAR ESCANEO DE MERCADO', use_container_width=True):
 
 st.divider()
 st.caption("Configuración: Ancho de alas (Spread) de $5. Ajuste basado en desviación estándar VIX1D.")
+
